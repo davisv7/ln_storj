@@ -1,35 +1,62 @@
 import pyqrcode
 from lndgrpc import LNDClient
 import configparser
+from time import sleep
+
+
+def create_node_obj(config, name):
+    invoice_mac_loc = config[name]["admin_mac_loc"]
+    tls_cert_loc = config[name]["tls_cert_loc"]
+    ip_address = config[name]["address"]
+
+    # pass in the ip-address with RPC port and network ('mainnet', 'testnet', 'simnet')
+    # the client defaults to 127.0.0.1:10009 and mainnet if no args provided
+    node_obj = LNDClient(macaroon_filepath=invoice_mac_loc, cert_filepath=tls_cert_loc, network="simnet",
+                         ip_address=ip_address)
+
+    return node_obj
+
+
+def create_qrcode(payment_request):
+    # Generate QR code
+    url = pyqrcode.create(payment_request)
+
+    # Create and save the png file naming "myqr.png"
+    url.png('qrcode.png', scale=6)
+
+
+def check_invoice_paid():
+    pass
 
 
 def main():
     config = configparser.ConfigParser()
     config.read("project.config")
 
-    invoice_mac_loc = config["file_locations"]["invoice_mac_loc"]
-    tls_cert_loc = config["file_locations"]["tls_cert_loc"]
-    ip_address = config["addresses"]["alice"]
+    alice = create_node_obj(config, "alice")
+    bob = create_node_obj(config, "bob")
 
-    # pass in the ip-address with RPC port and network ('mainnet', 'testnet', 'simnet')
-    # the client defaults to 127.0.0.1:10009 and mainnet if no args provided
-    lnd = LNDClient(macaroon_filepath=invoice_mac_loc, cert_filepath=tls_cert_loc, network="simnet",
-                    ip_address=ip_address)
-
-    # lnd.get_info() #permission denied with invoice_mac -> needs admin
-
-    # create invoice
-    invoice = lnd.add_invoice(100, "testing 42069")
-    print(type(invoice))
+    # alice create invoice
+    invoice = bob.add_invoice(8008, "testing 42069")
     r_hash = invoice.r_hash
-    payment_request = invoice.payment_request
     add_index = invoice.add_index
+    payment_request = invoice.payment_request
+    print(payment_request)
 
-    # Generate QR code
-    url = pyqrcode.create(payment_request)
+    # save invoice as qrcode
+    # create_qrcode(payment_request)
 
-    # Create and save the png file naming "myqr.png"
-    url.png('myqr.png', scale=6)
+    # alice pay invoice
+    alice.send_payment(payment_request)
+
+    # wait a few seconds
+    # sleep(10)
+
+    # check if invoice has been paid
+    a_paid_invoice = alice.list_payments()
+    b_paid_invoice = bob.list_payments()
+    print(a_paid_invoice)
+    print(b_paid_invoice)
 
 
 if __name__ == '__main__':
